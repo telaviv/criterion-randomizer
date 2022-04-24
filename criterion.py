@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import ipdb
 
 from datetime import datetime, timedelta
@@ -72,8 +73,7 @@ def is_directory_cached():
 
 
 def get_tags_from_criterion():
-    url = 'https://films.criterionchannel.com'
-    directory_html = requests.get(url).text
+    directory_html = get_criterion_directory_html()
     directory_soup = BeautifulSoup(directory_html, 'html.parser')
     return [link_match.match(v.find('a').attrs['href']).group(1) for v in directory_soup.find_all(class_='criterion-channel__tr')]
 
@@ -105,8 +105,7 @@ def chunks(v, n):
     for i in range(0, len(v), n):
         yield v[i:i + n]
 
-def add_tags_from_criterion():
-    cursor = initialize()
+def add_tags_from_criterion(cursor):
     tags = get_tags_from_criterion()
     add_tags_to_db(tags, cursor)
 
@@ -116,4 +115,6 @@ def list_rows(cursor):
 
 
 if __name__ == '__main__':
-    print(get_criterion_directory_html())
+    cursor = initialize()
+    add_tags_from_criterion(cursor)
+    list_rows(cursor)
