@@ -1,14 +1,20 @@
 import ipdb
 
-from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
+import os
 import random
 import re
 import requests
 import sqlite3
-from termcolor import colored
 import time
 
+from bs4 import BeautifulSoup
+from termcolor import colored
+
 link_match = re.compile(r'https://www.criterionchannel.com/(.*)')
+DIRECTORY_FILENAME = 'criterion-directory.html'
+DIRECTORY_URL = 'https://films.criterionchannel.com'
+
 
 column_types = [
     'id integer primary key autoincrement',
@@ -37,6 +43,33 @@ def select_random_movie():
     duration = film_soup.find(class_='duration-container').text.strip()
     link_tag = link_match.match(film_soup.find(rel='canonical').attrs['href']).group(1)
     return {'movie_id': movie_id, 'title': title, 'duration': duration, 'link_tag': link_tag}
+
+def get_criterion_directory_html():
+    if is_directory_cached():
+        return get_directory_from_cache()
+    html = get_directory_from_criterion()
+    save_directory_to_file(html)
+    return html
+
+def get_directory_from_criterion():
+    return requests.get(DIRECTORY_URL).text
+
+def get_directory_from_cache():
+    with open(DIRECTORY_FILENAME) as f:
+        return f.read()
+
+def save_directory_to_file(html):
+    with open(DIRECTORY_FILENAME, 'w') as f:
+        f.write(html)
+
+def is_directory_cached():
+    try:
+        mtime = int(os.path.getmtime(DIRECTORY_FILENAME))
+        current_time = get_time()
+        return current_time - mtime <  60 * 60 * 24
+    except OSError:
+        return False
+
 
 def get_tags_from_criterion():
     url = 'https://films.criterionchannel.com'
@@ -83,5 +116,4 @@ def list_rows(cursor):
 
 
 if __name__ == '__main__':
-    cursor = initialize()
-    list_rows(cursor)
+    print(get_criterion_directory_html())
