@@ -12,6 +12,9 @@ import time
 
 from bs4 import BeautifulSoup
 from termcolor import colored
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 link_match = re.compile(r'https://www.criterionchannel.com/(.*)')
 DIRECTORY_FILENAME = 'criterion-directory.html'
@@ -115,6 +118,9 @@ def list_rows(cursor):
         print(row)
 
 def select_movie_to_watch(cursor):
+    selected_movie = find_currently_selected_movie(cursor)
+    if selected_movie is not None:
+        resolve_selected_movie(selected_movie, cursor)
     query = 'select id, tag, hydrated_at from movies where watched_at is NULL;'
     result = cursor.execute(query).fetchall()
     id, tag, hydrated_at = random.choice(result)
@@ -146,6 +152,48 @@ def select_movie(id, cursor):
     now = get_time()
     cursor.execute(f'update movies set selected_at = {now} where id={id};')
 
+def unselect_all_movies(cursor):
+    cursor.execute(f'update movies set selected_at = null;')
+
+def watch_movie(id, cursor):
+    now = get_time()
+    cursor.execute(f'update movies set watched_at = {now}, selected_at = null where id={id};')
+
+def find_currently_selected_movie(cursor):
+    query = f'select id, tag, title, duration, selected_at, watched_at from movies where selected_at is not null;'
+    result = cursor.execute(query).fetchone()
+    if result is None:
+        return result
+
+    id, tag, title, duration, selected_at, watched_at = result;
+    return {
+        'id': id,
+        'tag': tag,
+        'title': title,
+        'duration': duration,
+        'selected_at': selected_at,
+        'watched_at': watched_at,
+    }
+
+def resolve_selected_movie(movie, cursor):
+    selection = None
+
+    while selection not in ['1', '2', '3']:
+        print(f"The movie \"{movie['title']}\" has already been selected.")
+        print("Would you like to:")
+        print("1) Mark the movie as watched")
+        print("2) Unselect the movie")
+        print("3) Cancel the operation")
+        print()
+        selection = input('🍿 => ')
+
+    if selection == '1':
+        watch_movie(movie['id'], cursor)
+    elif selection == '2':
+        unselect_all_movies(cursor)
+    else:
+        exit(0)
+
 def get_movie_data_from_url(url):
     film_html = requests.get(url, verify=False).text
     film_soup = BeautifulSoup(film_html, 'html.parser')
@@ -167,11 +215,13 @@ def get_movie_data_by_id(id, cursor):
         'watched_at': watched_at,
     }
 
+
 def select_random_movie():
     cursor = initialize()
     add_tags_from_criterion(cursor)
     cursor.connection.commit()
     movie = select_movie_to_watch(cursor)
+    cursor.connection.commit()
     print_movie(movie)
 
 if __name__ == '__main__':
