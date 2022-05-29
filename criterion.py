@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import ipdb
 
+import argparse
 from datetime import datetime, timedelta
 import os
 import random
@@ -53,7 +54,7 @@ def get_criterion_directory_html():
     return html
 
 def get_directory_from_criterion():
-    return requests.get(DIRECTORY_URL).text
+    return requests.get(DIRECTORY_URL, verify=False).text
 
 def get_directory_from_cache():
     with open(DIRECTORY_FILENAME) as f:
@@ -85,7 +86,7 @@ def randomize():
     print_movie(movie)
 
 def get_cursor():
-    return sqlite3.connect('criterion.db').cursor()
+    return sqlite3.connect('criterion.db', isolation_level='IMMEDIATE').cursor()
 
 def initialize():
     cursor = get_cursor()
@@ -113,8 +114,65 @@ def list_rows(cursor):
     for row in cursor.execute('select * from movies;'):
         print(row)
 
+def select_movie_to_watch(cursor):
+    query = 'select id, tag, hydrated_at from movies where watched_at is NULL;'
+    result = cursor.execute(query).fetchall()
+    id, tag, hydrated_at = random.choice(result)
+    if hydrated_at is None:
+        hydrate_movie(tag, cursor, selected=True)
+        cursor.connection.commit()
+    select_movie(id, cursor)
+    movie = get_movie_data_by_id(id, cursor)
+    return movie
 
-if __name__ == '__main__':
+def hydrate_movie(tag, cursor, selected=False):
+    url = get_movie_url(tag)
+    movie = get_movie_data_from_url(url)
+    movie_id, title, duration = movie['movie_id'], movie['title'], movie['duration']
+    now = get_time()
+    cursor.execute(f"update movies "
+                   f"set "
+                   f"movie_id='{movie_id}', "
+                   f"title='{title}', "
+                   f"duration='{duration}', "
+                   f"hydrated_at={now}, "
+                   f"updated_at={now} "
+                   f"where tag='{tag}';")
+
+def get_movie_url(tag):
+    return f'https://www.criterionchannel.com/{tag}'
+
+def select_movie(id, cursor):
+    now = get_time()
+    cursor.execute(f'update movies set selected_at = {now} where id={id};')
+
+def get_movie_data_from_url(url):
+    film_html = requests.get(url, verify=False).text
+    film_soup = BeautifulSoup(film_html, 'html.parser')
+    movie_id = film_soup.find(class_='js-collection-item').attrs['data-item-id']
+    title = film_soup.find(class_='collection-title').text.strip()
+    duration = film_soup.find(class_='duration-container').text.strip()
+    return {'movie_id': movie_id, 'title': title, 'duration': duration}
+
+def get_movie_data_by_id(id, cursor):
+    query = f'select id, tag, title, duration, selected_at, watched_at from movies where id = {id};'
+    result = cursor.execute(query).fetchone()
+    id, tag, title, duration, selected_at, watched_at = result;
+    return {
+        'id': id,
+        'tag': tag,
+        'title': title,
+        'duration': duration,
+        'selected_at': selected_at,
+        'watched_at': watched_at,
+    }
+
+def select_random_movie():
     cursor = initialize()
     add_tags_from_criterion(cursor)
-    list_rows(cursor)
+    cursor.connection.commit()
+    movie = select_movie_to_watch(cursor)
+    print_movie(movie)
+
+if __name__ == '__main__':
+    select_random_movie()
