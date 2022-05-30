@@ -113,10 +113,6 @@ def add_tags_from_criterion(cursor):
     tags = get_tags_from_criterion()
     add_tags_to_db(tags, cursor)
 
-def list_rows(cursor):
-    for row in cursor.execute('select * from movies;'):
-        print(row)
-
 def select_movie_to_watch(cursor):
     selected_movie = find_currently_selected_movie(cursor)
     if selected_movie is not None:
@@ -165,7 +161,10 @@ def find_currently_selected_movie(cursor):
     if result is None:
         return result
 
-    id, tag, title, duration, selected_at, watched_at = result;
+    return normalize_movie(result)
+
+def normalize_movie(query_result):
+    id, tag, title, duration, selected_at, watched_at = query_result;
     return {
         'id': id,
         'tag': tag,
@@ -194,6 +193,23 @@ def resolve_selected_movie(movie, cursor):
     else:
         exit(0)
 
+def display_all_watched_movies():
+    cursor = initialize()
+    for movie in get_all_watched_movies(cursor):
+        print(movie['title'])
+
+def get_all_watched_movies(cursor):
+    query = f'''
+    select id, tag, title, duration, selected_at, watched_at
+    from movies
+    where watched_at is not null
+    order by watched_at desc;
+    '''
+    movies = []
+    for movie_result in cursor.execute(query).fetchall():
+        movies.append(normalize_movie(movie_result))
+    return movies
+
 def get_movie_data_from_url(url):
     film_html = requests.get(url, verify=False).text
     film_soup = BeautifulSoup(film_html, 'html.parser')
@@ -205,16 +221,7 @@ def get_movie_data_from_url(url):
 def get_movie_data_by_id(id, cursor):
     query = f'select id, tag, title, duration, selected_at, watched_at from movies where id = {id};'
     result = cursor.execute(query).fetchone()
-    id, tag, title, duration, selected_at, watched_at = result;
-    return {
-        'id': id,
-        'tag': tag,
-        'title': title,
-        'duration': duration,
-        'selected_at': selected_at,
-        'watched_at': watched_at,
-    }
-
+    return normalize_movie(result)
 
 def select_random_movie():
     cursor = initialize()
@@ -226,3 +233,4 @@ def select_random_movie():
 
 if __name__ == '__main__':
     select_random_movie()
+    display_all_watched_movies()
