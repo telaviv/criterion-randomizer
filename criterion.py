@@ -34,20 +34,7 @@ column_types = [
     'updated_at integer',
 ]
 
-def select_random_movie():
-    url = 'https://films.criterionchannel.com'
-    directory_html = requests.get(url).text
-    directory_soup = BeautifulSoup(directory_html, 'html.parser')
-    links = [v.attrs['data-href'] for v in directory_soup.find_all(class_='criterion-channel__tr')]
-    link = random.choice(links)
 
-    film_html = requests.get(link).text
-    film_soup = BeautifulSoup(film_html, 'html.parser')
-    movie_id = film_soup.find(class_='js-collection-item').attrs['data-item-id']
-    title = film_soup.find(class_='collection-title').text.strip()
-    duration = film_soup.find(class_='duration-container').text.strip()
-    link_tag = link_match.match(film_soup.find(rel='canonical').attrs['href']).group(1)
-    return {'movie_id': movie_id, 'title': title, 'duration': duration, 'link_tag': link_tag}
 
 def get_criterion_directory_html():
     if is_directory_cached():
@@ -231,6 +218,16 @@ def select_random_movie():
     cursor.connection.commit()
     print_movie(movie)
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Select a random criterion movie!')
+    help_string = 'List all of your watched movies, most recent first.'
+    parser.add_argument('-lw', '--list-watched', help=help_string, action='store_true')
+    args = parser.parse_args()
+
+    if args.list_watched:
+        display_all_watched_movies()
+    else:
+        select_random_movie()
+
 if __name__ == '__main__':
-    select_random_movie()
-    display_all_watched_movies()
+    parse_arguments()
